@@ -1,0 +1,23 @@
+# Local Python environment and generated caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local settings and credentials
+.env
+.env.*
+!.env.example
+
+# User documents, vector databases, logs, and generated processing artifacts
+data/
+
+# Editor and operating system files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# Sample input PDF is available through scripts/generate_sample_docs.py
+wordpress-pdf-invoice-plugin-sample.pdf
