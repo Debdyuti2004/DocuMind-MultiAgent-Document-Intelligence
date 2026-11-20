@@ -146,10 +146,11 @@ function fillLibraryFilters() {
 }
 
 function fillCompareOptions() {
+  const comparableDocuments = documents.filter(document => document.indexed !== false && (document.num_chunks || 0) > 0);
   for (const [selector, placeholder] of [["#compareA", "Select first document…"], ["#compareB", "Select second document…"]]) {
     const select = $(selector);
     const previous = select.value;
-    select.innerHTML = `<option value="">${placeholder}</option>${documents.map(document => {
+    select.innerHTML = `<option value="">${placeholder}</option>${comparableDocuments.map(document => {
       const suffix = `${formatDate(document.created_at)} · ${document.document_id.slice(-4)}`;
       return `<option value="${escapeHtml(document.document_id)}">${escapeHtml(displayName(document))} · ${escapeHtml(suffix)}</option>`;
     }).join("")}`;
@@ -337,6 +338,7 @@ $("#askButton").onclick = async () => {
         enable_verification: $("#verifyToggle").checked,
         enable_research: false,
         session_id: sessionId,
+        output_language: $("#askOutputLanguage").value || "en",
       }),
     });
     const item = {
@@ -372,14 +374,14 @@ $("#compareButton").onclick = async () => {
   button.textContent = "Comparing extracted evidence…";
   $("#compareArea").innerHTML = `<article class="card compare-output"><div class="skeleton" style="width:40%;margin-bottom:15px"></div><div class="skeleton" style="width:90%"></div></article>`;
   try {
-    const result = await api("/compare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doc1_id: first, doc2_id: second }) });
+    const result = await api("/compare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doc1_id: first, doc2_id: second, output_language: $("#compareOutputLanguage").value || "en" }) });
     const metrics = result.metrics || [];
     const metricCards = metrics.map(metric => {
       const change = metric.change_percent == null ? "—" : `${metric.change_percent > 0 ? "+" : ""}${metric.change_percent}%`;
       const number = value => value == null ? "—" : Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
       return `<section class="metric comparison-metric"><div class="metric-head"><b>${escapeHtml(metric.metric)}</b><span class="badge">${escapeHtml(change)}</span></div><div class="compare-values"><div><small>${escapeHtml(result.doc1_name)}</small><strong>${number(metric.doc1_value)}</strong></div><div><small>${escapeHtml(result.doc2_name)}</small><strong>${number(metric.doc2_value)}</strong></div></div><div class="compare-evidence"><span>${escapeHtml((metric.doc1_text || "").slice(0, 190))}</span><span>${escapeHtml((metric.doc2_text || "").slice(0, 190))}</span></div></section>`;
     }).join("");
-    $("#compareArea").innerHTML = `<article class="card compare-output"><div class="result-meta"><span class="confidence">${metrics.length ? `${metrics.length} comparable metric(s)` : "Text comparison"}</span></div><h2 style="font-size:16px">${escapeHtml(result.doc1_name)} <span class="muted">vs</span> ${escapeHtml(result.doc2_name)}</h2><p class="answer">${escapeHtml(result.comparison_summary)}</p>${metrics.length ? `<h3 class="mini-heading">Extracted metrics and calculated changes</h3><div class="comparison-metric-grid">${metricCards}</div>` : result.key_differences?.length ? `<h3 class="mini-heading">Evidence found in both documents</h3><ul class="fact-list">${result.key_differences.map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul>` : ""}${result.citations?.length ? `<h3 class="mini-heading">Source evidence</h3><div class="source-list">${result.citations.map(renderSource).join("")}</div>` : `<p class="muted source-unavailable">No citations were returned for this comparison.</p>`}</article>`;
+    $("#compareArea").innerHTML = `<article class="card compare-output"><div class="result-meta"><span class="confidence">${metrics.length ? `${metrics.length} comparable metric(s)` : "Text comparison"}</span></div><h2 style="font-size:16px">${escapeHtml(result.doc1_name)} <span class="muted">vs</span> ${escapeHtml(result.doc2_name)}</h2><p class="answer">${escapeHtml(result.comparison_summary)}</p>${metrics.length ? `<h3 class="mini-heading">Extracted metrics and calculated changes</h3><div class="comparison-metric-grid">${metricCards}</div>` : result.key_differences?.length ? `<h3 class="mini-heading">Source excerpts for review</h3><ul class="fact-list">${result.key_differences.map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul>` : ""}${result.citations?.length ? `<h3 class="mini-heading">Source evidence</h3><div class="source-list">${result.citations.map(renderSource).join("")}</div>` : `<p class="muted source-unavailable">No citations were returned for this comparison.</p>`}</article>`;
   } catch (error) {
     $("#compareArea").innerHTML = `<article class="card compare-output"><div class="eyebrow" style="color:#c4575b">Comparison failed</div><p style="margin:8px 0 0;color:#586477">${escapeHtml(error.message)}</p></article>`;
   } finally { button.disabled = false; button.textContent = "Compare documents →"; }

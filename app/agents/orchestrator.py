@@ -54,14 +54,24 @@ class AgentOrchestrator:
         document_ids: Optional[List[str]] = None,
         session_id: str = "default_session",
         enable_research: bool = False,
-        enable_verification: bool = True
+        enable_verification: bool = True,
+        output_language: Optional[str] = "en"
     ) -> AgentState:
         """Executes the dynamic multi-agent workflow based on user intent."""
         start_time = time.perf_counter()
 
+        from app.services.language_service import language_detector
+        from app.services.translation_service import translation_service
+
         # Step 0: Resolve query context from memory
         resolved_query = memory_service.resolve_query(session_id, query)
-        logger.info(f"Orchestrator received: '{query}' (Resolved: '{resolved_query}')")
+        q_det = language_detector.detect(resolved_query)
+        query_lang = q_det.language_code
+        translated_query = None
+        if query_lang != "en":
+            translated_query = translation_service.translate(resolved_query, source_lang=query_lang, target_lang="en")
+
+        logger.info(f"Orchestrator received: '{query}' (Resolved: '{resolved_query}', Lang: {query_lang})")
 
         # Resolve active documents
         doc_ids = document_ids or []
@@ -72,11 +82,18 @@ class AgentOrchestrator:
 
         active_docs: Dict[str, str] = {}
         doc_types: Dict[str, str] = {}
+        doc_languages: Dict[str, str] = {}
         for did in doc_ids:
             meta = registry.get(did)
             if meta:
                 active_docs[did] = meta.filename
                 doc_types[did] = meta.document_type
+                doc_languages[did] = meta.language_code or "en"
+
+        target_output_lang = output_language or "en"
+        if target_output_lang == "original" and doc_languages:
+            # Use primary language of the selected document
+            target_output_lang = list(doc_languages.values())[0]
 
         # Initialize Agent State
         state = AgentState(
@@ -84,13 +101,18 @@ class AgentOrchestrator:
             query=resolved_query,
             document_ids=doc_ids,
             active_documents=active_docs,
-            document_types=doc_types
+            document_types=doc_types,
+            output_language=target_output_lang,
+            query_language=query_lang,
+            document_languages=doc_languages,
+            translated_query=translated_query,
+            translation_applied=bool(translated_query and translated_query != resolved_query)
         )
 
         state.add_log(
             agent_name="Orchestrator",
             action="Workflow Initialization",
-            detail=f"Received query. Active documents: {list(active_docs.values())}."
+            detail=f"Received query. Active documents: {list(active_docs.values())} (Query lang: {q_det.primary_language}, Output lang: {target_output_lang})."
         )
 
         # Step 1: Planner Agent determines intent and dynamic task delegation
@@ -107,7 +129,8 @@ class AgentOrchestrator:
             state = self._run_timed(financial_agent, state)
 
         # B. Risk Detection Agent
-        if intent == "risk_assessment" or "risk" in resolved_query.lower() or "threat" in resolved_query.lower():
+        q_check = f"{resolved_query.lower()} {translated_query.lower() if translated_query else ''}"
+        if intent == "risk_assessment" or any(w in q_check for w in ["risk", "threat", "hazard", "vulnerability", "जोखिम", "खतरा", "ঝুঁকি", "riesgo", "menace", "risiko"]):
             state = self._run_timed(risk_agent, state)
 
         # C. Research Agent (external web benchmarks)

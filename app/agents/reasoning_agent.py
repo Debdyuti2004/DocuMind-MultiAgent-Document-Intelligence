@@ -32,18 +32,50 @@ class ReasoningAgent(BaseAgent):
             state.add_log(agent_name=self.name, action="Evidence Selection", detail="No source chunks were retrieved.", status="warning")
             return state
 
-        words = [w for w in re.findall(r"[a-zA-Z0-9]{3,}", state.query.lower()) if w not in STOPWORDS]
+        from app.services.language_service import language_detector
+        from app.services.translation_service import translation_service
+
+        q_clean = state.query.lower()
+        words = [w for w in re.findall(r"[\wÀ-ÿ\u0900-\u097F\u0980-\u09FF\u0600-\u06FF\u4E00-\u9FFF]{3,}", q_clean) if w not in STOPWORDS]
+
+        # Expand words with translated query terms if query is non-English
+        q_det = language_detector.detect(state.query)
+        if q_det.language_code != "en":
+            trans_q = translation_service.translate(state.query, source_lang=q_det.language_code, target_lang="en")
+            trans_words = [w for w in re.findall(r"[a-zA-Z0-9]{3,}", trans_q.lower()) if w not in STOPWORDS]
+            words = list(dict.fromkeys(words + trans_words))
+
         selected: List[str] = []
         any_match = False
+
         for chunk in state.retrieved_chunks:
-            for part in re.split(r"(?<=[.!?])\s+|\n+", chunk.text):
+            chunk_lang = chunk.language or language_detector.detect(chunk.text[:200]).language_code
+            for part in re.split(r"(?<=[.!?।\n])\s+|\n+", chunk.text):
                 sentence = re.sub(r"\s+", " ", part).strip(" •\t")
-                if len(sentence) < 18:
+                if len(sentence) < 14:
                     continue
-                matches = [word for word in words if word in sentence.lower()]
+
+                trans_sentence = sentence
+                if chunk_lang != "en":
+                    trans_sentence = translation_service.translate(sentence, source_lang=chunk_lang, target_lang="en")
+
+                # Match against either original sentence or aligned English translation
+                s_lower = sentence.lower()
+                ts_lower = trans_sentence.lower()
+                matches = [word for word in words if word in s_lower or word in ts_lower]
+
                 if matches:
                     any_match = True
-                    selected.append(sentence)
+                    # Store fact according to configured output language
+                    if state.output_language == "en" and chunk_lang != "en":
+                        fact_display = f"{trans_sentence} [{sentence}]" if trans_sentence != sentence else sentence
+                        selected.append(fact_display)
+                        state.translations[fact_display] = sentence
+                    else:
+                        selected.append(sentence)
+                        if trans_sentence != sentence:
+                            state.translations[sentence] = trans_sentence
+
         selected = list(dict.fromkeys(selected))[:10]
 
         if words and not any_match:
@@ -59,7 +91,7 @@ class ReasoningAgent(BaseAgent):
         state.add_log(
             agent_name=self.name,
             action="Evidence Selection",
-            detail=f"Selected {len(selected)} source sentence(s) matching the query; no unsupported interpretation was added.",
+            detail=f"Selected {len(selected)} source sentence(s) matching the query across languages; no unsupported interpretation was added.",
             status="completed" if selected else "warning",
         )
         return state

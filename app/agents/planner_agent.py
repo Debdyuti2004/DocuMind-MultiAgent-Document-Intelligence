@@ -18,8 +18,18 @@ class PlannerAgent(BaseAgent):
         )
 
     def analyze_intent(self, query: str, active_doc_count: int = 1) -> Tuple[str, List[str], List[str]]:
-        """Determines intent, generates task list, and selects necessary agents dynamically."""
-        q_lower = query.lower()
+        """Determines intent, generates task list, and selects necessary agents dynamically across languages."""
+        from app.services.language_service import language_detector
+        from app.services.translation_service import translation_service
+
+        q_clean = query.strip()
+        det = language_detector.detect(q_clean)
+        normalized_q = q_clean
+        if det.language_code != "en":
+            # Translate query to English for standardized intent analysis
+            normalized_q = translation_service.translate(q_clean, source_lang=det.language_code, target_lang="en")
+
+        q_lower = f"{query.lower()} {normalized_q.lower()}"
 
         # 1. External research intent (industry benchmarks, competitor averages, external context)
         if any(w in q_lower for w in ["industry", "competitor", "market average", "external", "benchmark", "global standard"]):

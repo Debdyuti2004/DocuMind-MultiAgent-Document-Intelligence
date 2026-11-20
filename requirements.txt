@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+chromadb==0.5.23
+numpy==1.26.4
+onnxruntime==1.18.1
+posthog==3.7.0
+pymupdf==1.24.14
+python-docx
+pandas==2.2.3
+openpyxl
+python-multipart
+httpx
+pytest

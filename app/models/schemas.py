@@ -20,6 +20,14 @@ class DocumentMetadata(BaseModel):
     domain: str = "General"
     classification_confidence: float = 0.0
     storage_filename: Optional[str] = None
+    language: str = "English"
+    language_code: str = "en"
+    additional_languages: List[str] = Field(default_factory=list)
+    language_confidence: float = 1.0
+    is_mixed_language: bool = False
+    language_warning: Optional[str] = None
+    translation_applied: bool = False
+    indexed: bool = True
 
 
 class DocumentChunk(BaseModel):
@@ -32,6 +40,8 @@ class DocumentChunk(BaseModel):
     text: str
     chunk_index: int = 0
     token_count: int = 0
+    language: Optional[str] = "en"
+    translated_text: Optional[str] = None
 
 
 class ExtractedTable(BaseModel):
@@ -74,6 +84,9 @@ class SourceCitation(BaseModel):
     page: int
     section: str = "Content"
     snippet: str
+    original_snippet: Optional[str] = None
+    translated_snippet: Optional[str] = None
+    language: Optional[str] = "en"
 
 
 class ComparisonMetric(BaseModel):
@@ -103,6 +116,10 @@ class DocumentSummary(BaseModel):
     potential_risks: List[str] = Field(default_factory=list)
     suggested_questions: List[str] = Field(default_factory=list)
     summary_version: int = 2
+    language: str = "English"
+    language_code: str = "en"
+    is_translated: bool = False
+    original_language_summary: Optional[str] = None
 
 
 class QueryRequest(BaseModel):
@@ -112,6 +129,7 @@ class QueryRequest(BaseModel):
     enable_research: bool = False
     enable_verification: bool = True
     session_id: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    output_language: Optional[str] = Field(default="en", description="Output language: 'en' (default), 'original', or ISO code")
 
     @field_validator("query")
     @classmethod
@@ -139,6 +157,9 @@ class QueryResponse(BaseModel):
     confidence_score: float = 0.95
     execution_time_seconds: float = 0.0
     agent_logs: List[AgentActionLog] = Field(default_factory=list)
+    output_language: Optional[str] = "en"
+    detected_query_language: Optional[str] = "en"
+    translation_applied: bool = False
 
 
 class CompareRequest(BaseModel):
@@ -146,6 +167,7 @@ class CompareRequest(BaseModel):
     doc1_id: str = Field(min_length=1, max_length=120)
     doc2_id: str = Field(min_length=1, max_length=120)
     focus_areas: Optional[List[str]] = Field(default=None, max_length=20)
+    output_language: Optional[str] = Field(default="en", description="Output language: 'en' (default), 'original', or ISO code")
 
     @model_validator(mode="after")
     def require_distinct_documents(self):
@@ -165,3 +187,7 @@ class CompareResponse(BaseModel):
     key_differences: List[str] = Field(default_factory=list)
     citations: List[SourceCitation] = Field(default_factory=list)
     agent_logs: List[AgentActionLog] = Field(default_factory=list)
+    output_language: Optional[str] = "en"
+    doc1_language: Optional[str] = "en"
+    doc2_language: Optional[str] = "en"
+    translation_applied: bool = False

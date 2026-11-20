@@ -55,8 +55,10 @@ def test_hybrid_retriever():
     results = retriever.retrieve(query="Why did net profit decrease in FY2025?")
     assert isinstance(results, list)
     # Check that returned elements are DocumentChunk with page and section metadata
+    assert results
     for r in results:
-        assert r.page in [1, 2]
+        assert isinstance(r.page, int) and r.page > 0
+        assert r.section
         assert len(r.text) > 0
         assert r.filename != ""
 

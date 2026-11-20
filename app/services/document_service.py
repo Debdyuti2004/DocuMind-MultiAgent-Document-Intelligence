@@ -31,12 +31,15 @@ class DocumentService:
         if not pages or not any((page.text or "").strip() for page in pages):
             raise ValueError(f"No readable text could be extracted from {filename}.")
 
-        chunks = self.chunker.chunk_document(doc_id=doc_id, filename=filename, pages=pages)
+        full_text = "\n".join(page.text for page in pages)
+        from app.services.language_service import language_detector
+        detection = language_detector.detect(full_text)
+
+        chunks = self.chunker.chunk_document(doc_id=doc_id, filename=filename, pages=pages, language=detection.language_code)
         if not chunks:
             raise ValueError(f"No searchable text could be extracted from {filename}.")
         vector_store.add_chunks(chunks)
 
-        full_text = "\n".join(page.text for page in pages)
         from app.agents.classifier_agent import classifier_agent
         classification = classifier_agent.classify_document(full_text, filename)
 
@@ -53,12 +56,19 @@ class DocumentService:
             domain=classification["domain"],
             classification_confidence=classification["confidence"],
             storage_filename=file_path.name,
+            language=detection.language_name,
+            language_code=detection.language_code,
+            additional_languages=detection.additional_languages,
+            language_confidence=detection.confidence,
+            is_mixed_language=detection.is_mixed,
+            language_warning=detection.warning,
+            translation_applied=False,
         )
         registry.register(metadata)
         summary = self.generate_document_summary(doc_id, filename, metadata.document_type, pages, tables)
         logger.info(
-            "Ingested document %s ('%s'): %s pages, %s chunks, type=%s",
-            doc_id, filename, len(pages), len(chunks), metadata.document_type,
+            "Ingested document %s ('%s'): %s pages, %s chunks, type=%s, language=%s (%s)",
+            doc_id, filename, len(pages), len(chunks), metadata.document_type, detection.language_name, detection.language_code,
         )
         return metadata, summary
 
@@ -72,8 +82,9 @@ class DocumentService:
         summary_path.write_text(summary.model_dump_json(indent=2), encoding="utf-8")
         return summary
 
-    def compare_documents(self, doc1_id: str, doc2_id: str) -> CompareResponse:
-        return compare_documents(doc1_id, doc2_id)
+    def compare_documents(self, doc1_id: str, doc2_id: str, output_language: str = "en") -> CompareResponse:
+        return compare_documents(doc1_id, doc2_id, output_language=output_language)
+
 
 
 document_service = DocumentService()

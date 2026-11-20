@@ -67,6 +67,9 @@ def root(request: Request):
 @app.get("/config")
 def public_config():
     """Returns non-secret runtime settings needed by the dashboard."""
+    from app.document.ocr_service import ocr_service
+    from app.services.language_service import language_detector
+
     return {
         "llm_provider": settings.LLM_PROVIDER,
         "llm_model": settings.OLLAMA_MODEL if settings.LLM_PROVIDER == "ollama" else settings.OPENAI_MODEL if settings.LLM_PROVIDER == "openai" else "Rule-based fallback",
@@ -78,9 +81,13 @@ def public_config():
         "similarity_threshold": settings.SIMILARITY_THRESHOLD,
         "max_upload_bytes": MAX_FILE_SIZE_BYTES,
         "supported_extensions": sorted(SUPPORTED_EXTENSIONS),
-        "ocr_available": False,
+        "ocr_available": ocr_service.is_available(),
         "external_research_available": False,
+        "multilingual_enabled": True,
+        "supported_languages": language_detector.get_supported_languages(),
+        "default_output_language": "en",
     }
+
 
 
 @app.get("/health")
@@ -151,7 +158,12 @@ async def upload_document(file: UploadFile = File(...)):
 @app.get("/documents", response_model=List[DocumentMetadata])
 def list_documents():
     """Lists all registered documents."""
-    return registry.list_all()
+    return [
+        metadata.model_copy(update={
+            "indexed": bool(vector_store.get_document_chunks(metadata.document_id))
+        })
+        for metadata in registry.list_all()
+    ]
 
 
 @app.get("/documents/{document_id}", response_model=DocumentMetadata)
@@ -193,7 +205,8 @@ def execute_query(req: QueryRequest):
             document_ids=req.document_ids,
             session_id=req.session_id or "default_session",
             enable_research=req.enable_research,
-            enable_verification=req.enable_verification
+            enable_verification=req.enable_verification,
+            output_language=req.output_language or "en",
         )
 
         elapsed = time.perf_counter() - start_t
@@ -213,7 +226,10 @@ def execute_query(req: QueryRequest):
             confidence=state.confidence_level,
             confidence_score=state.confidence_score,
             execution_time_seconds=round(elapsed, 3),
-            agent_logs=state.agent_logs
+            agent_logs=state.agent_logs,
+            output_language=state.output_language,
+            detected_query_language=state.query_language,
+            translation_applied=state.translation_applied,
         )
     except HTTPException:
         raise
@@ -226,12 +242,33 @@ def execute_query(req: QueryRequest):
 def compare_documents(req: CompareRequest):
     """Performs side-by-side comparison between two documents."""
     try:
-        return document_service.compare_documents(req.doc1_id, req.doc2_id)
+        return document_service.compare_documents(
+            req.doc1_id, req.doc2_id, output_language=req.output_language or "en"
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception:
         logger.exception("Document comparison failed")
         raise HTTPException(status_code=500, detail="Document comparison failed.")
+
+
+@app.post("/detect-language")
+def detect_language(payload: Dict[str, str]):
+    """Analyzes text snippet and returns detected language, confidence, and script metadata."""
+    text = payload.get("text", "")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty.")
+    from app.services.language_service import language_detector
+    res = language_detector.detect(text)
+    return {
+        "language_code": res.language_code,
+        "language_name": res.language_name,
+        "confidence": res.confidence,
+        "is_mixed": res.is_mixed,
+        "additional_languages": res.additional_languages,
+        "warning": res.warning,
+    }
+
 
 
 @app.get("/documents/{document_id}/summary", response_model=DocumentSummary)
@@ -253,6 +290,10 @@ def get_document_summary(document_id: str):
             data["key_facts"] = []
             data["important_findings"] = []
             data["potential_risks"] = []
+    if data.get("original_language_summary") == data.get("executive_summary"):
+        # Correct stale persisted summaries that were marked translated even though
+        # the configured offline translator returned the original text unchanged.
+        data["is_translated"] = False
     return DocumentSummary(**data)
 
 

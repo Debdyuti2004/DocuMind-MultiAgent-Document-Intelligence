@@ -13,7 +13,9 @@ class Settings(BaseSettings):
     DATA_DIR: Path = BASE_DIR / "data"
     UPLOAD_DIR: Path = DATA_DIR / "uploads"
     PROCESSED_DIR: Path = DATA_DIR / "processed"
-    CHROMA_PATH: Path = DATA_DIR / "chroma"
+    # Keep the original persisted index intact; this runtime store is rebuilt
+    # with the pinned, Windows-stable ChromaDB release.
+    CHROMA_PATH: Path = DATA_DIR / "chroma_active"
     SAMPLE_DOCS_DIR: Path = DATA_DIR / "sample_docs"
 
     # LLM Settings
@@ -26,14 +28,21 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = Field(default="llama3")
 
     # Embeddings & Vector Store
-    EMBEDDING_MODEL: str = Field(default="all-MiniLM-L6-v2")
+    EMBEDDING_MODEL: str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", description="Multilingual SentenceTransformer model")
+    FALLBACK_EMBEDDING_MODEL: str = Field(default="all-MiniLM-L6-v2")
     CHROMA_COLLECTION_NAME: str = Field(default="documind_docs")
     
+    # Multilingual & Translation Settings
+    DEFAULT_OUTPUT_LANGUAGE: str = Field(default="en", description="Default output language ('en')")
+    TRANSLATION_PROVIDER: str = Field(default="offline", description="offline, openai, ollama, or auto")
+    OCR_ENABLED: bool = Field(default=True, description="Enable OCR for scanned/low-text pages when engine is installed")
+    OCR_ENGINE: str = Field(default="auto", description="auto, pytesseract, or none")
+
     # Chunking & Retrieval parameters
     CHUNK_SIZE: int = Field(default=800, description="Target chunk character size")
     CHUNK_OVERLAP: int = Field(default=150, description="Chunk overlap characters")
     TOP_K: int = Field(default=5, description="Default number of retrieved chunks")
-    SIMILARITY_THRESHOLD: float = Field(default=0.35, description="Min cosine similarity score")
+    SIMILARITY_THRESHOLD: float = Field(default=0.25, description="Min cosine similarity score for cross-lingual matches")
 
     # App Settings
     APP_HOST: str = "127.0.0.1"

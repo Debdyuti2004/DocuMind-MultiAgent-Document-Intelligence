@@ -14,7 +14,7 @@ class HierarchicalChunker:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
-    def chunk_document(self, doc_id: str, filename: str, pages: List[ParsedPage]) -> List[DocumentChunk]:
+    def chunk_document(self, doc_id: str, filename: str, pages: List[ParsedPage], language: str = "en") -> List[DocumentChunk]:
         """Performs hierarchical chunking across all pages and sections of a document."""
         chunks: List[DocumentChunk] = []
         global_index = 0
@@ -37,7 +37,8 @@ class HierarchicalChunker:
                     filename=filename,
                     page=page_num,
                     section=heading,
-                    start_index=global_index
+                    start_index=global_index,
+                    language=language
                 )
 
                 chunks.extend(section_chunks)
@@ -49,8 +50,8 @@ class HierarchicalChunker:
         """Splits text into paragraphs by double newlines or punctuation groupings."""
         raw_paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
         if not raw_paras:
-            # Fallback to sentence groupings
-            sentences = re.split(r"(?<=[.!?])\s+", text)
+            # Fallback to sentence groupings with multilingual punctuation
+            sentences = re.split(r"(?<=[.!?।\u0964\u0965。؟])\s*", text)
             return [s.strip() for s in sentences if s.strip()]
         return raw_paras
 
@@ -61,7 +62,8 @@ class HierarchicalChunker:
         filename: str,
         page: int,
         section: str,
-        start_index: int
+        start_index: int,
+        language: str = "en"
     ) -> List[DocumentChunk]:
         """Assembles paragraphs into chunks adhering to target size and overlap."""
         chunks: List[DocumentChunk] = []
@@ -82,7 +84,8 @@ class HierarchicalChunker:
                         page=page,
                         section=section,
                         text=chunk_text,
-                        index=local_chunk_idx
+                        index=local_chunk_idx,
+                        language=language
                     )
                 )
                 local_chunk_idx += 1
@@ -105,14 +108,15 @@ class HierarchicalChunker:
                         page=page,
                         section=section,
                         text=chunk_text,
-                        index=local_chunk_idx
+                        index=local_chunk_idx,
+                        language=language
                     )
                 )
 
         return chunks
 
     def _create_chunk_model(
-        self, doc_id: str, filename: str, page: int, section: str, text: str, index: int
+        self, doc_id: str, filename: str, page: int, section: str, text: str, index: int, language: str = "en"
     ) -> DocumentChunk:
         """Constructs a validated DocumentChunk schema instance."""
         token_est = len(text.split())
@@ -125,4 +129,6 @@ class HierarchicalChunker:
             text=text,
             chunk_index=index,
             token_count=token_est,
+            language=language
         )
+

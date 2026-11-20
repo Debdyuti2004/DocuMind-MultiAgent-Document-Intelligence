@@ -19,6 +19,12 @@ class AgentState(BaseModel):
     document_ids: List[str] = Field(default_factory=list)
     active_documents: Dict[str, str] = Field(default_factory=dict)  # id -> filename
     document_types: Dict[str, str] = Field(default_factory=dict)  # id -> doc_type
+    output_language: str = "en"
+    query_language: str = "en"
+    document_languages: Dict[str, str] = Field(default_factory=dict)  # id -> language_code
+    translated_query: Optional[str] = None
+    translation_applied: bool = False
+    translations: Dict[str, str] = Field(default_factory=dict)
 
     # Planning & Orchestration
     intent: Optional[str] = None

@@ -17,26 +17,30 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the route map, ingestion pipeline, re
 
 ## Requirements and setup
 
-Python 3.10+ is recommended. A prepared Windows environment is included in `.venv`.
+Python 3.11 is recommended. Install dependencies and start the API with the included launcher:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uv venv --python 3.11 .venv
+uv pip install --python .venv\Scripts\python.exe -r requirements.txt
+.\start_documind.ps1
 ```
 
 Open <http://127.0.0.1:8000/> for the dashboard, <http://127.0.0.1:8000/docs> for Swagger UI, and <http://127.0.0.1:8000/health> for service status. No separate Node/Vite server is needed; the existing FastAPI process serves `app/static/`.
 
-If PowerShell blocks activation, invoke the environment directly:
+The launcher keeps the older `data/chroma` index intact and uses a fresh `data/chroma_active` index. Documents from the old index must be uploaded again if they are not searchable in the new one.
+
+If PowerShell blocks script execution, run the server directly:
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+ $env:CHROMA_PATH = "data/chroma_active"
+ .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 ## Configuration
 
 Settings load from environment variables or an optional `.env` file. Common options include `LLM_PROVIDER` (`ollama`, `openai`, or `mock`), `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `EMBEDDING_MODEL`, `CHUNK_SIZE`, `CHUNK_OVERLAP`, `TOP_K`, and `SIMILARITY_THRESHOLD`. Do not put API keys in browser code. The current query path uses extractive source matching and deterministic calculations; it does not invoke the configured LLM provider. OCR and external web research are unavailable in this build.
 
-ChromaDB persists under `data/chroma/`. Parsed document metadata and summaries persist under `data/processed/`; uploads go to `data/uploads/`.
+ChromaDB persists under `data/chroma_active/` when using the launcher. Parsed document metadata and summaries persist under `data/processed/`; uploads go to `data/uploads/`.
 
 ## How retrieval and agents work
 

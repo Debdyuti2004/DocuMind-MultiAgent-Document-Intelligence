@@ -7,36 +7,46 @@ from app.models.state import AgentState
 
 RISK_PATTERN = re.compile(
     r"\b(risk|threat|challenge|vulnerabilit\w*|liabilit\w*|penalt\w*|exposure|uncertain\w*|"
-    r"may result|subject to|termination|breach|non-compliance|noncompliance)\b",
+    r"may result|subject to|termination|breach|non-compliance|noncompliance|"
+    r"जोखिम|खतरा|दायित्व|चुनौती|अनिश्चित|दंड|उल्लंघन|समाप्ति|"
+    r"ঝুঁকি|বিপদ|দায়|চ্যালেঞ্জ|জরিমানা|লঙ্ঘন|বাতিল|"
+    r"riesgo\w*|amenaza\w*|vulnerabilidad\w*|responsabilidad\w*|sanción|multa|penalización|incumplimiento|rescisión|"
+    r"risque\w*|menace\w*|vulnérabilité\w*|responsabilité\w*|pénalité\w*|manquement|résiliation|"
+    r"risiko|risiken|bedrohung|gefahr|haftung|vertragsverletzung|kündigung|"
+    r"مخاطر|خطر|تهديد|مسؤولية|غرامة|مخالفة|إنهاء|"
+    r"风险|威胁|漏洞|法律责任|处罚|违约|终止|"
+    r"リスク|脅威|法的責任|ペナルティ|契約解除|違反)\b",
     re.I,
 )
 
 
 class RiskDetectionAgent(BaseAgent):
-    """Surfaces source sentences that contain explicit risk-related wording."""
+    """Surfaces source sentences that contain explicit risk-related wording across languages."""
 
     def __init__(self):
         super().__init__(name="Risk Detection Agent", description="Finds explicit risk-related statements in retrieved source text.")
 
     def run(self, state: AgentState) -> AgentState:
         state.current_agent = self.name
+        from app.services.translation_service import translation_service
+
         indicators = []
         seen = set()
         for chunk in state.retrieved_chunks:
-            for part in re.split(r"(?<=[.!?])\s+|\n+", chunk.text):
+            text_to_scan = chunk.text
+            for part in re.split(r"(?<=[.!?])\s+|\n+", text_to_scan):
                 sentence = re.sub(r"\s+", " ", part).strip(" •\t")
                 if not sentence or not RISK_PATTERN.search(sentence) or sentence.lower() in seen:
                     continue
                 seen.add(sentence.lower())
                 match = RISK_PATTERN.search(sentence)
                 severity = "Unrated"
-                # Only use a severity when the source itself labels it.
-                surrounding = sentence[max(0, match.start() - 18):match.end() + 18].lower()
-                if re.search(r"\b(high|critical|severe)\b", surrounding):
+                surrounding = sentence[max(0, match.start() - 25):match.end() + 25].lower()
+                if re.search(r"\b(high|critical|severe|उच्च|गंभीर|alto|crítico|grave|hoch|kritisch|عالي|حرجة|高|重大)\b", surrounding):
                     severity = "High"
-                elif re.search(r"\b(medium|moderate)\b", surrounding):
+                elif re.search(r"\b(medium|moderate|मध्यम|medio|moderado|moyen|modéré|mittel|متوسط|中等)\b", surrounding):
                     severity = "Medium"
-                elif re.search(r"\blow\b", surrounding):
+                elif re.search(r"\b(low|निम्न|कम|bajo|faible|gering|منخفض|低|軽微)\b", surrounding):
                     severity = "Low"
                 indicators.append({
                     "category": "Source disclosure",

@@ -61,6 +61,17 @@ class DocumentParser:
                 tables = TableExtractor.extract_from_pdf_page(page, doc_id, file_path.name, page_num)
                 all_tables.extend(tables)
 
+                # If text is minimal, check optional OCR for scanned pages
+                from app.document.ocr_service import ocr_service
+                if ocr_service.is_scanned_page(text):
+                    try:
+                        pix = page.get_pixmap(dpi=150)
+                        ocr_text = ocr_service.ocr_pixmap(pix)
+                        if ocr_text:
+                            text = ocr_text
+                    except Exception as ocr_err:
+                        logger.debug(f"Optional OCR skipped for page {page_num}: {ocr_err}")
+
                 # Identify sections by headings
                 sections = cls._identify_sections(text)
                 pages.append(ParsedPage(page_number=page_num, text=text, sections=sections, tables=tables))

@@ -31,8 +31,35 @@ class VerificationAgent(BaseAgent):
         checks = []
         for claim in state.explicit_facts:
             normalized_claim = normalize(claim)
-            support = [chunk for chunk in chunks if normalized_claim and normalized_claim in normalize(chunk.text)]
-            checks.append((claim, support, "Exact normalized text match in retrieved source." if support else "No exact text match was found in retrieved sources."))
+            orig_text = getattr(state, "translations", {}).get(claim)
+            bracket_match = re.search(r"\[(.*?)\]", claim)
+            bracket_text = bracket_match.group(1) if bracket_match else None
+
+            support = []
+            matched_via_alignment = False
+
+            for chunk in chunks:
+                norm_chunk_text = normalize(chunk.text)
+                norm_chunk_trans = normalize(chunk.translated_text) if chunk.translated_text else ""
+
+                if normalized_claim and normalized_claim in norm_chunk_text:
+                    support.append(chunk)
+                elif orig_text and normalize(orig_text) in norm_chunk_text:
+                    support.append(chunk)
+                    matched_via_alignment = True
+                elif bracket_text and normalize(bracket_text) in norm_chunk_text:
+                    support.append(chunk)
+                    matched_via_alignment = True
+                elif norm_chunk_trans and normalized_claim and normalized_claim in norm_chunk_trans:
+                    support.append(chunk)
+                    matched_via_alignment = True
+
+            reasoning = (
+                "Exact normalized text match in retrieved source." if support and not matched_via_alignment
+                else "Matched in retrieved source via verified multilingual passage alignment." if support
+                else "No exact text match was found in retrieved sources."
+            )
+            checks.append((claim, support, reasoning))
 
         for calculation in state.derived_calculations:
             sources = calculation.get("sources", [])

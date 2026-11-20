@@ -25,7 +25,10 @@ class VectorStore:
         )
         self.collection = self.client.get_or_create_collection(
             name=self.collection_name,
-            metadata={"hnsw:space": "cosine"}
+            metadata={"hnsw:space": "cosine"},
+            # All vectors are supplied by embedding_service, so do not load
+            # Chroma's default ONNX embedding model on Windows.
+            embedding_function=None,
         )
 
     def add_chunks(self, chunks: List[DocumentChunk]) -> int:
@@ -42,7 +45,8 @@ class VectorStore:
                 "page": c.page,
                 "section": c.section,
                 "chunk_index": c.chunk_index,
-                "token_count": c.token_count
+                "token_count": c.token_count,
+                "language": c.language or "en",
             }
             for c in chunks
         ]
@@ -109,6 +113,7 @@ class VectorStore:
                 "page": int(meta.get("page", 1)),
                 "section": meta.get("section", "General"),
                 "chunk_index": int(meta.get("chunk_index", 0)),
+                "language": meta.get("language", "en"),
                 "similarity_score": similarity
             })
 

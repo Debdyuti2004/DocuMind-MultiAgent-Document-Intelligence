@@ -13,16 +13,40 @@ class FinancialAgent(BaseAgent):
     """Extracts figures from retrieved table/text lines and calculates only sourced deltas."""
 
     LABELS = {
-        "Revenue": ("total revenue", "revenue", "net sales", "turnover"),
-        "Operating expenses": ("operating expenses", "total expenses", "expenses"),
-        "Net profit": ("net profit", "profit after tax", "pat", "net income"),
-        "EBITDA": ("ebitda",),
-        "Total debt": ("total debt",),
-        "Total assets": ("total assets",),
-        "Total liabilities": ("total liabilities",),
-        "Employees": ("employees", "headcount"),
+        "Revenue": (
+            "total revenue", "revenue", "net sales", "turnover",
+            "कुल राजस्व", "राजस्व", "बिक्री", "মোট রাজস্ব", "বিক্রয়",
+            "ingresos totales", "ingresos", "ventas netas",
+            "chiffre d'affaires", "chiffre d'affaires total",
+            "gesamtumsatz", "umsatz", "ricavi", "totale ricavi",
+            "إجمالي الإيرادات", "الإيرادات", "营业收入", "总营业收入", "売上高"
+        ),
+        "Operating expenses": (
+            "operating expenses", "total expenses", "expenses",
+            "संचालन व्यय", "कुल व्यय", "व्यय", "खर्च", "পরিচালন ব্যয়", "ব্যয়",
+            "gastos operativos", "gastos totales", "gastos",
+            "dépenses d'exploitation", "charges", "charges d'exploitation",
+            "betriebsaufwand", "betriebsausgaben", "spese operative",
+            "المصروفات التشغيلية", "المصروفات", "营业费用", "总支出", "営業費用"
+        ),
+        "Net profit": (
+            "net profit", "profit after tax", "pat", "net income",
+            "शुद्ध लाभ", "लाभ", "कर पश्चात लाभ", "নীট লাভ", "লাভ", "মুনাফা",
+            "beneficio neto", "ganancia neta", "bénéfice net", "résultat net",
+            "jahresüberschuss", "nettogewinn", "gewinn", "utile netto",
+            "صافي الربح", "الأرباح", "净利润", "当期純利益"
+        ),
+        "EBITDA": ("ebitda", "ईबीआईटीडीए"),
+        "Total debt": ("total debt", "debt", "कुल ऋण", "মোট ঋণ", "deuda total", "dette totale", "gesamtschulden"),
+        "Total assets": ("total assets", "assets", "कुल संपत्ति", "মোট সম্পদ", "activos totales", "total de l'actif", "gesamtvermögen"),
+        "Total liabilities": ("total liabilities", "liabilities", "कुल देनदारियां", "মোট দায়", "pasivos totales", "total du passif"),
+        "Employees": ("employees", "headcount", "कर्मचारी", "কর্মী", "empleados", "employés", "mitarbeiter", "dipendenti", "员工", "従業員"),
     }
-    NUMBER = re.compile(r"(?<![A-Za-z])(?:₹|\$|€|£|INR\s*|USD\s*)?\s*(-?\d[\d,]*(?:\.\d+)?)\s*(?:%|Cr\b|Crore\b|Lakh\b|million\b|billion\b)?", re.I)
+    NUMBER = re.compile(
+        r"(?<![A-Za-z\u0900-\u097F\u0980-\u09FF])(?:₹|\$|€|£|¥|元|INR\s*|USD\s*|EUR\s*)?\s*(-?\d[\d,]*(?:\.\d+)?)\s*"
+        r"(?:%|Cr\b|Crore\b|Lakh\b|करोड़|लाख|কোটি|million\b|billion\b|millones\b|milliards\b|mio\b|mrd\b|亿|万)?",
+        re.I
+    )
 
     def __init__(self):
         super().__init__(name="Financial Analysis Agent", description="Extracts values from retrieved financial evidence and computes deterministic changes.")
@@ -95,9 +119,11 @@ class FinancialAgent(BaseAgent):
 
         state.financial_metrics = found
         calculations: List[Dict[str, Any]] = []
+        comparative_text = f"{state.query} {state.translated_query or ''}"
         comparative_query = bool(re.search(
-            r"\b(compare|comparison|versus|vs\.?|across|between|increase|decrease|change|growth|decline|trend|difference)\b",
-            state.query,
+            r"\b(compare|comparison|versus|vs\.?|across|between|increase|decrease|change|growth|decline|trend|difference|"
+            r"तुलना|अंतर|बढ़ोतरी|कमी|বৃদ্ধি|ह্রাস|comparar|diferencia|crecimiento|disminución|comparer|vergleich|مقارنة|比较)\b",
+            comparative_text,
             re.I,
         ))
         if not comparative_query or len(selected_ids) != 2:
